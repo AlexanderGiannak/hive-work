@@ -1,0 +1,3 @@
+# Vercel only serves the static pages. The Python API runs on the server.
+*.py
+__pycache__
