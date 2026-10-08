@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://hivework.duckdns.org/api/:path*" },
+    { "source": "/static/:path*", "destination": "/:path*" },
+    { "source": "/kalshi", "destination": "/kalshi.html" },
+    { "source": "/hive/:name", "destination": "/hive.html" }
+  ],
+  "headers": [
+    {
+      "source": "/api/:path*",
+      "headers": [{ "key": "x-vercel-enable-rewrite-caching", "value": "0" }]
+    }
+  ]
+}

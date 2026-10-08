@@ -106,9 +106,9 @@ Browser -> <project>.vercel.app          dashboard pages (dashboard/static)
 
 ### Dashboard on Vercel
 
-The pages are static files, so they're hosted on Vercel's free Hobby plan. `dashboard/vercel.json` serves the pages from `dashboard/static` and forwards every `/api/*` call to `https://hivework.duckdns.org`. If you use a different DuckDNS name, change it there and in `.env`.
+The pages are static files, so they're hosted on Vercel's free Hobby plan. `dashboard/static/vercel.json` forwards every `/api/*` call to `https://hivework.duckdns.org`. If you use a different DuckDNS name, change it there and in `.env`.
 
-1. In Vercel, import the GitHub repo. Set **Root Directory** to `dashboard`, **Framework** to Other, and leave the build command empty. (Or run `npx vercel` inside `dashboard`.)
+1. In Vercel, import the GitHub repo. Set **Root Directory** to `dashboard/static`, **Framework** to Other, and leave the build command empty. (Or run `npx vercel` inside `dashboard/static`.)
 2. Vercel redeploys on every merge to `main`. The site is at `<project>.vercel.app`; Vercel picks another name if `hivework` is taken.
 3. Pages load right away, but they only show data once the server is up at `hivework.duckdns.org`.
 
