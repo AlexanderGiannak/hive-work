@@ -1,0 +1,40 @@
+name: Deploy
+
+# Runs after CI passes on main. Pulls the new code onto the server and restarts
+# whatever changed. Nobody edits files on the server directly.
+#
+# Setup (once, by whoever owns the server):
+#   Repo variables:  DEPLOY_ENABLED=true
+#   Repo secrets:    DEPLOY_HOST (server IP), DEPLOY_USER (ubuntu), DEPLOY_SSH_KEY (private key)
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency: deploy
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts
+          ssh -i ~/.ssh/id_deploy "$USER@$HOST" "
+            set -e
+            cd ~/hivework
+            git fetch --quiet origin main
+            git reset --hard $SHA
+            docker compose --profile prod up -d --build --remove-orphans
+            docker image prune -f
+          "

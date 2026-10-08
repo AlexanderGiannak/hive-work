@@ -1,0 +1,6 @@
+# Caddy gets an HTTPS certificate for $DOMAIN (hivework.duckdns.org) automatically.
+# The dashboard pages live on Vercel, which forwards /api/* calls here. No login.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy dashboard:8000
+}

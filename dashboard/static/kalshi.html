@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kalshi Scoreboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <section>
+    <h2>Scoreboard <span class="sub">fake money, Kalshi demo</span></h2>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section>
+    <h2>Positions</h2>
+    <div id="positions"></div>
+  </section>
+
+  <section>
+    <h2>Recent trades</h2>
+    <div id="trades"></div>
+  </section>
+
+  <section>
+    <h2>Blocked by risk</h2>
+    <div id="blocked"></div>
+  </section>
+
+  <section>
+    <h2>Markets vs fair value <span class="sub" id="markets-sub"></span></h2>
+    <div id="markets"></div>
+  </section>
+</main>
+
+<script src="/static/common.js"></script>
+<script>
+function tile(label, value, cls) {
+  return el("div", { class: "tile" }, el("div", { class: "label" }, label), el("div", { class: `value ${cls || ""}` }, value));
+}
+
+function closesIn(iso) {
+  const s = (new Date(iso) - Date.now()) / 1000;
+  if (s < 0) return "closed";
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  return `${(s / 3600).toFixed(1)}h`;
+}
+
+async function refreshScoreboard() {
+  const s = await getJSON("/api/kalshi/scoreboard");
+  const t = s.totals;
+  const pnlCls = t.pnl > 0 ? "good" : t.pnl < 0 ? "bad" : "";
+  fill("tiles",
+    tile("P&L", money(t.pnl), pnlCls),
+    tile("Spent", money(t.cost)),
+    tile("Worth now", money(t.value)),
+    tile("Open positions", t.open),
+    tile("Settled", t.settled ? `${t.wins}/${t.settled} won` : "0"),
+  );
+
+  fill("positions", table(
+    ["Market", "Side", { label: "Contracts", num: 1 }, { label: "Avg price", num: 1 }, { label: "Cost", num: 1 }, { label: "Worth", num: 1 }, { label: "P&L", num: 1 }, "State", "Mode"],
+    s.positions.map((p) => el("tr", {},
+      el("td", {}, p.ticker), el("td", {}, p.side.toUpperCase()),
+      el("td", { class: "num" }, p.contracts), el("td", { class: "num" }, cents(p.avg_price)),
+      el("td", { class: "num" }, money(p.cost)), el("td", { class: "num" }, money(p.value)),
+      el("td", { class: `num ${p.pnl > 0 ? "good" : p.pnl < 0 ? "bad" : ""}` }, money(p.pnl)),
+      el("td", {}, pill(p.state, p.state.split(" ")[0])), el("td", { class: "muted" }, p.mode),
+    )),
+    "No positions yet.",
+  ));
+
+  fill("trades", table(
+    ["When", "Market", "Side", { label: "Filled", num: 1 }, { label: "Price", num: 1 }, { label: "Fair", num: 1 }, "Status"],
+    s.trades.map((r) => el("tr", {},
+      el("td", {}, clock(r.ts)), el("td", {}, r.ticker), el("td", {}, r.side.toUpperCase()),
+      el("td", { class: "num" }, `${r.filled}/${r.count}`), el("td", { class: "num" }, cents(+r.price)),
+      el("td", { class: "num" }, r.fair === null ? "–" : cents(+r.fair)), el("td", {}, pill(r.status)),
+    )),
+    "No trades yet.",
+  ));
+
+  fill("blocked", table(
+    ["When", "Market", "Side", "Reason"],
+    s.blocked.map((b) => el("tr", {},
+      el("td", {}, clock(b.ts * 1000)), el("td", {}, b.data.ticker), el("td", {}, b.data.side.toUpperCase()),
+      el("td", { class: "wrap" }, b.data.reason),
+    )),
+    "Nothing blocked yet.",
+  ));
+}
+
+async function refreshMarkets() {
+  const m = await getJSON("/api/kalshi/markets?limit=40");
+  const spot = Object.entries(m.spot || {}).map(([k, v]) => `${k} ${v ? "$" + Number(v).toLocaleString() : "–"}`).join(" · ");
+  fill("markets-sub", `${spot}  ·  ${m.total || 0} markets  ·  book ${ago(m.book_age)}, fair ${ago(m.fair_age)}`);
+  fill("markets", table(
+    ["Market", "Strike", "Closes in", { label: "Yes bid", num: 1 }, { label: "Yes ask", num: 1 }, { label: "No ask", num: 1 }, { label: "Fair (yes)", num: 1 }, { label: "Best gap", num: 1 }],
+    m.rows.map((r) => el("tr", {},
+      el("td", {}, r.ticker), el("td", {}, r.subtitle || ""), el("td", {}, closesIn(r.close_time)),
+      el("td", { class: "num" }, cents(r.yes_bid)), el("td", { class: "num" }, cents(r.yes_ask)), el("td", { class: "num" }, cents(r.no_ask)),
+      el("td", { class: "num" }, cents(r.fair)),
+      el("td", { class: `num ${r.gap > 0 ? "good" : "muted"}` }, r.gap === null ? "–" : `${(r.gap * 100).toFixed(1)}¢`),
+    )),
+    "No market data yet. The KalshiBook bot posts every 30 seconds.",
+  ));
+}
+
+renderHeader("Kalshi");
+every(5000, async () => renderQueen(await getJSON("/api/overview")));
+every(10000, refreshScoreboard);
+every(10000, refreshMarkets);
+</script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hive Page</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <!--
+    The default page for every hive at /hive/<name>. It shows your bots, the
+    latest data on each of your topics, and your hive's log. When you want
+    something nicer, copy this file to static/<yourhive>.html, add a route for
+    it in dashboard/app.py (look at /kalshi), and make it yours.
+  -->
+  <section>
+    <h2 id="title">Hive</h2>
+    <div id="bots"></div>
+  </section>
+
+  <section>
+    <h2>Topics <span class="sub">latest message on each</span></h2>
+    <div id="topics"></div>
+  </section>
+
+  <section>
+    <h2>Log <span class="sub">last 24 hours</span></h2>
+    <div id="log"></div>
+  </section>
+</main>
+
+<script src="/static/common.js"></script>
+<script>
+const hive = decodeURIComponent(location.pathname.split("/")[2] || "");
+document.title = `${hive} · Hivework`;
+fill("title", `${hive} hive`);
+
+async function refresh() {
+  const o = await getJSON("/api/overview");
+  renderQueen(o);
+  const bots = o.bots.filter((b) => b.hive === hive);
+  fill("bots", table(BOT_HEADERS, botRows(bots), `No bots in ${hive} have checked in yet. Is it in HIVES and hive.yml?`));
+
+  const mine = o.topics.filter((t) => t.topic.startsWith(`${hive}:`));
+  const blocks = await Promise.all(mine.map(async (t) => {
+    const msg = await getJSON(`/api/topic/${encodeURIComponent(t.topic)}`);
+    let text = JSON.stringify(msg.data, null, 2);
+    if (text.length > 4000) text = text.slice(0, 4000) + "\n…";
+    return el("div", {}, el("strong", {}, t.topic), " ", el("span", { class: "muted" }, ago(t.age)), el("pre", {}, text));
+  }));
+  fill("topics", ...(blocks.length ? blocks : [el("div", { class: "empty" }, "Nothing posted yet.")]));
+}
+
+async function refreshLog() {
+  const data = await getJSON(`/api/log?hours=24&hive=${encodeURIComponent(hive)}`);
+  fill("log", table(["When", "What", "Who", "Detail"], logRows(data.rows), "Nothing logged."));
+}
+
+renderHeader(hive);
+every(10000, refresh);
+every(30000, refreshLog);
+</script>
+</body>
+</html>

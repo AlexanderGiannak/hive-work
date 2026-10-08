@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hivework</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<main>
+  <section>
+    <h2>Bots <span class="sub" id="bots-sub"></span>
+      <span style="margin-left:auto"></span>
+      <button class="danger" id="kill">Kill switch</button>
+    </h2>
+    <div id="bots"></div>
+  </section>
+
+  <section>
+    <h2>While you were asleep
+      <select id="hours">
+        <option value="1">last hour</option>
+        <option value="12" selected>last 12 hours</option>
+        <option value="24">last 24 hours</option>
+        <option value="72">last 3 days</option>
+      </select>
+      <span class="counts" id="counts"></span>
+    </h2>
+    <div id="log"></div>
+  </section>
+
+  <section>
+    <h2>Board <span class="sub">latest message on each topic</span></h2>
+    <div id="topics"></div>
+  </section>
+</main>
+
+<script src="/static/common.js"></script>
+<script>
+let killOn = false;
+
+document.getElementById("kill").addEventListener("click", async () => {
+  const turnOn = !killOn;
+  const msg = turnOn
+    ? "Stop EVERY bot in every hive? They stay stopped until you turn this off."
+    : "Turn the kill switch off and let the queen start the bots again?";
+  if (!confirm(msg)) return;
+  await getJSON("/api/killswitch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ target: "all", on: turnOn }),
+  });
+  refreshOverview();
+});
+document.getElementById("hours").addEventListener("change", refreshLog);
+
+async function refreshOverview() {
+  const o = await getJSON("/api/overview");
+  renderQueen(o);
+  killOn = o.killswitch.includes("all");
+  const btn = document.getElementById("kill");
+  btn.textContent = killOn ? "Kill switch is ON (click to turn off)" : "Kill switch";
+  btn.classList.toggle("on", killOn);
+
+  const alive = o.bots.filter((b) => b.status === "alive").length;
+  fill("bots-sub", `${alive}/${o.bots.length} alive`);
+  fill("bots", table(BOT_HEADERS, botRows(o.bots), "No bots have checked in yet. Is the queen running?"));
+
+  fill("topics", table(["Topic", "Updated"], o.topics.map((t) => {
+    const hive = t.topic.split(":")[0];
+    const page = hive === "kalshi" ? "/kalshi" : `/hive/${hive}`;
+    return el("tr", {}, el("td", {}, el("a", { href: page }, t.topic)), el("td", {}, ago(t.age)));
+  }), "Nothing on the board yet."));
+}
+
+async function refreshLog() {
+  const hours = document.getElementById("hours").value;
+  const data = await getJSON(`/api/log?hours=${hours}`);
+  fill("counts", ...Object.entries(data.counts).map(([k, n]) => pill(`${n} ${k}`, k)));
+  fill("log", table(["When", "What", "Who", "Detail"], logRows(data.rows), "Quiet night. Nothing logged."));
+}
+
+renderHeader("Overview");
+every(5000, refreshOverview);
+every(30000, refreshLog);
+</script>
+</body>
+</html>

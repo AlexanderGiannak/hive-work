@@ -1,0 +1,25 @@
+# The Kalshi hive: watches Kalshi demo markets next to live crypto and stock
+# prices and trades with fake money.
+#
+# Data flow on the board:
+#   CoinbaseFeed -> kalshi:crypto  \
+#   KalshiBook   -> kalshi:book     > Pricer -> kalshi:fair -> Watcher -> kalshi:signals
+#   StockFeed    -> kalshi:stocks  /
+#   kalshi:signals -> Risk -> kalshi:orders -> Trader -> kalshi:fills
+#                          -> kalshi:blocked
+hive: kalshi
+bots:
+  CoinbaseFeed: { products: [BTC-USD, ETH-USD] }
+  StockFeed: { symbols: [SPY, QQQ, COIN, MSTR] }
+  KalshiBook: { series: [KXBTCD, KXETHD], max_hours: 30 }
+  Pricer:
+    underlying: { KXBTCD: BTC-USD, KXETHD: ETH-USD }
+  Watcher: { min_edge: 0.08, min_minutes_left: 30, count: 1 }
+  Risk:
+    limits:
+      max_contracts_per_market: 10
+      max_exposure: 100
+      max_orders_per_hour: 20
+  Trader: {}
+  # Trades and risk blocks already land in Postgres, so the Recorder just keeps price history.
+  Recorder: { topics: [crypto, stocks], every: 60 }

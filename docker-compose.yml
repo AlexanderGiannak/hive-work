@@ -1,0 +1,90 @@
+# Local:   docker compose up --build            -> dashboard at http://localhost:8000
+# Server:  docker compose --profile prod up -d  -> adds Caddy (HTTPS for hivework.duckdns.org), DuckDNS and backups
+# The dashboard pages are hosted on Vercel, which forwards /api/* to the server.
+
+x-app: &app
+  build: .
+  env_file: .env
+  restart: unless-stopped
+  depends_on:
+    redis: { condition: service_healthy }
+    postgres: { condition: service_healthy }
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hive}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hive}
+      POSTGRES_DB: ${POSTGRES_DB:-hive}
+    volumes: [pg-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  queen:
+    <<: *app
+    command: python -m core.queen
+    volumes: ["./secrets:/app/secrets:ro"]
+    stop_grace_period: 20s
+    mem_limit: 1500m
+
+  dashboard:
+    <<: *app
+    command: uvicorn dashboard.app:app --host 0.0.0.0 --port 8000 --proxy-headers
+    # Only reachable from this machine. On the server, Caddy (HTTPS) is the way in.
+    ports: ["127.0.0.1:8000:8000"]
+    mem_limit: 300m
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: [prod]
+    env_file: .env
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [dashboard]
+    restart: unless-stopped
+
+  duckdns:
+    image: curlimages/curl:latest
+    profiles: [prod]
+    env_file: .env
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          echo "duckdns: $$(curl -fsS "https://www.duckdns.org/update?domains=$${DUCKDNS_SUBDOMAIN}&token=$${DUCKDNS_TOKEN}&ip=")"
+          sleep 300
+        done
+    restart: unless-stopped
+
+  backup:
+    image: postgres:16-alpine
+    profiles: [prod]
+    env_file: .env
+    volumes: ["./backups:/backups", "./deploy/backup.sh:/backup.sh:ro"]
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: unless-stopped
+
+volumes:
+  redis-data:
+  pg-data:
+  caddy-data:
+  caddy-config:
