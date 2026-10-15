@@ -55,4 +55,7 @@ else
   echo "$out" | tail -5
   exit 1
 fi
+
+# So you can check cron is alive: cat ~/Library/Logs/hivework.lastrun
+date '+%F %T' > "$HOME/Library/Logs/hivework.lastrun"
 exit 0

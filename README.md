@@ -110,7 +110,7 @@ Setting it up on a Mac:
    ```
 5. Keep it plugged in, lid open, and logged in. If it sleeps, the hive pauses and comes back within 5 minutes of waking.
 
-Logs: `tail -f ~/Library/Logs/hivework.log` for updates, `cd ~/hivework && docker compose logs -f queen` for the bots.
+Logs: `tail -f ~/Library/Logs/hivework.log` for updates, `cat ~/Library/Logs/hivework.lastrun` for when cron last ran, `cd ~/hivework && docker compose logs -f queen` for the bots.
 
 ### Dashboard on Vercel
 
