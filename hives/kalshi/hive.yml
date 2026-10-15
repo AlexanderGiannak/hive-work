@@ -21,5 +21,8 @@ bots:
       max_exposure: 100
       max_orders_per_hour: 20
   Trader: {}
-  # Trades and risk blocks already land in Postgres, so the Recorder just keeps price history.
-  Recorder: { topics: [crypto, stocks], every: 60 }
+  # Kalshi's own view of the account, for the scoreboard. start_balance is what the demo began with.
+  KalshiAccount: { start_balance: 100 }
+  # Trades and risk blocks already land in Postgres, so the Recorder just keeps price
+  # history and the account value over time.
+  Recorder: { topics: [crypto, stocks, account], every: 60 }

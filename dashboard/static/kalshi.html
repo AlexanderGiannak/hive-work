@@ -9,7 +9,7 @@
 <body>
 <main>
   <section>
-    <h2>Scoreboard <span class="sub">fake money, Kalshi demo</span></h2>
+    <h2>Scoreboard <span class="sub" id="scoreboard-sub">fake money, Kalshi demo</span></h2>
     <div class="tiles" id="tiles"></div>
   </section>
 
@@ -50,14 +50,26 @@ function closesIn(iso) {
 async function refreshScoreboard() {
   const s = await getJSON("/api/kalshi/scoreboard");
   const t = s.totals;
-  const pnlCls = t.pnl > 0 ? "good" : t.pnl < 0 ? "bad" : "";
+  const a = s.account;
+  const cls = (x) => (x > 0 ? "good" : x < 0 ? "bad" : "");
+  // Kalshi's own account numbers when we have them (demo mode); our trade math otherwise (paper mode).
+  const top = a
+    ? [
+        tile("P&L (from Kalshi)", money(a.pnl), cls(a.pnl)),
+        tile("Account value", money(a.total)),
+        tile("Cash", money(a.cash)),
+        tile("In positions", money(a.positions)),
+      ]
+    : [tile("P&L", money(t.pnl), cls(t.pnl)), tile("Spent", money(t.cost)), tile("Worth now", money(t.value))];
   fill("tiles",
-    tile("P&L", money(t.pnl), pnlCls),
-    tile("Spent", money(t.cost)),
-    tile("Worth now", money(t.value)),
+    ...top,
+    tile("Fees paid", money(t.fees)),
     tile("Open positions", t.open),
     tile("Settled", t.settled ? `${t.wins}/${t.settled} won` : "0"),
   );
+  fill("scoreboard-sub", a
+    ? `fake money, Kalshi demo · started at ${money(a.start)} · account checked ${ago(a.age)}`
+    : "fake money, paper trading");
 
   fill("positions", table(
     ["Market", "Side", { label: "Contracts", num: 1 }, { label: "Avg price", num: 1 }, { label: "Cost", num: 1 }, { label: "Worth", num: 1 }, { label: "P&L", num: 1 }, "State", "Mode"],

@@ -65,7 +65,8 @@ async def _market_info(client: KalshiClient, ticker: str) -> dict | None:
 
 async def scoreboard(http: httpx.AsyncClient) -> dict:
     positions = await db.fetch(
-        """SELECT ticker, side, mode, SUM(filled) AS contracts, SUM(filled * price) AS cost, MAX(ts) AS last_ts
+        """SELECT ticker, side, mode, SUM(filled) AS contracts, SUM(filled * price) AS cost, MAX(ts) AS last_ts,
+                  SUM(filled * COALESCE((detail->'kalshi'->>'average_fee_paid')::numeric, 0)) AS fees
            FROM trades WHERE hive = 'kalshi' AND action = 'buy' AND filled > 0
            GROUP BY ticker, side, mode ORDER BY MAX(ts) DESC"""
     )
@@ -73,10 +74,10 @@ async def scoreboard(http: httpx.AsyncClient) -> dict:
     live = {m["ticker"]: m for m in (book["data"]["markets"] if book else [])}
     client = KalshiClient(http)
 
-    totals = {"cost": 0.0, "value": 0.0, "pnl": 0.0, "open": 0, "settled": 0, "wins": 0}
+    totals = {"cost": 0.0, "fees": 0.0, "value": 0.0, "pnl": 0.0, "open": 0, "settled": 0, "wins": 0}
     rows = []
     for p in positions:
-        contracts, cost = int(p["contracts"]), float(p["cost"])
+        contracts, cost, fees = int(p["contracts"]), float(p["cost"]), float(p["fees"])
         m = live.get(p["ticker"]) or await _market_info(client, p["ticker"]) or {}
         result = m.get("result")
         if result in ("yes", "no"):
@@ -96,19 +97,24 @@ async def scoreboard(http: httpx.AsyncClient) -> dict:
             "contracts": contracts,
             "avg_price": round(cost / contracts, 4),
             "cost": round(cost, 2),
+            "fees": round(fees, 2),
             "value": round(value, 2),
-            "pnl": round(value - cost, 2),
+            "pnl": round(value - cost - fees, 2),
             "state": state,
             "last_ts": p["last_ts"],
         })
         totals["cost"] += cost
+        totals["fees"] += fees
         totals["value"] += value
 
-    totals["pnl"] = totals["value"] - totals["cost"]
+    totals["pnl"] = totals["value"] - totals["cost"] - totals["fees"]
     totals = {k: round(v, 2) if isinstance(v, float) else v for k, v in totals.items()}
 
     trades = await db.fetch(
         "SELECT ts, ticker, side, count, filled, price, fair, status, mode FROM trades WHERE hive = 'kalshi' ORDER BY ts DESC LIMIT 25"
     )
     blocked = await bus.history("kalshi:blocked", 15)
-    return {"totals": totals, "positions": rows, "trades": trades, "blocked": list(reversed(blocked))}
+    account = await bus.latest("kalshi:account")
+    if account:
+        account = {**account["data"], "age": round(time.time() - account["ts"], 1)}
+    return {"totals": totals, "account": account, "positions": rows, "trades": trades, "blocked": list(reversed(blocked))}
