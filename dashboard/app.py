@@ -1,8 +1,8 @@
 """The dashboard: what every bot is doing, what happened overnight, and the Kalshi scoreboard.
 
 Run locally with Docker Compose and open http://localhost:8000.
-On the server the pages are hosted on Vercel, which forwards /api/* calls through
-Caddy (HTTPS for hivework.duckdns.org) to this app. There is no login.
+For everyone else the pages are hosted on Vercel, which forwards /api/* calls to
+this app through Tailscale Funnel on the Mac that runs the hive. There is no login.
 """
 
 import asyncio

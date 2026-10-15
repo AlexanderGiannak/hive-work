@@ -1,6 +1,6 @@
 # Hivework
 
-A team of small bots that runs 24/7 on a free server. Start with [build.md](build.md). It's the guide for the whole project. This file is the quick reference.
+A team of small bots that runs 24/7 on a Mac. Start with [build.md](build.md). It's the guide for the whole project. This file is the quick reference.
 
 ## Run it
 
@@ -86,30 +86,38 @@ Bot tips:
 - `async for data in self.listen("signals")` waits for new messages and heartbeats for you.
 - Anything in your `hive.yml` entry ends up in `self.config`.
 
-## Server (whoever runs it)
+## The always-on hive (runs on a Mac)
 
 ```
-Browser -> <project>.vercel.app          dashboard pages (dashboard/static)
+Browser -> hive-work-dashboard.vercel.app        pages (dashboard/static)
              | /api/* rewrite
              v
-           https://hivework.duckdns.org  Caddy, HTTPS only
+           https://alexanders-macbook-pro.tail4e1a56.ts.net   Tailscale Funnel
              v
-           dashboard API -> Redis / Postgres <- queen + bots
+           localhost:8000 dashboard API -> Redis / Postgres <- queen + bots
 ```
 
-1. Oracle Cloud Always Free Ubuntu ARM VM. Open ports 80/443 in the VCN security list.
-2. Claim `hivework` at duckdns.org and point it at the server's public IP (the DuckDNS container keeps it updated).
-3. `deploy/server-setup.sh` installs Docker, opens the firewall, adds swap and clones the repo.
-4. `cp .env.example .env` and fill in the server-only section (DuckDNS token, Discord). Copy `secrets/kalshi.pem` over by hand.
-5. `docker compose --profile prod up -d --build` adds Caddy (HTTPS for `hivework.duckdns.org`), the DuckDNS updater and daily backups to `./backups`.
-6. Auto deploys: set repo variable `DEPLOY_ENABLED=true` and secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`. After CI passes on `main`, `.github/workflows/deploy.yml` updates the server.
+The hive runs on a MacBook from a dedicated clone at `~/hivework` (not your working copy, and outside `~/Documents`, which macOS blocks cron from reading). Cron runs `scripts/update.sh` every 5 minutes. It starts Docker Desktop if needed, keeps the Mac awake while it's plugged in, pulls `main` from GitHub and rebuilds when there's new code, and restarts anything that stopped. Merging to `main` is the deploy.
+
+Setting it up on a Mac:
+
+1. Install Docker Desktop and Tailscale, sign in to both, and turn on Docker's "Start when you sign in".
+2. `git clone https://github.com/AlexanderGiannak/hive-work.git ~/hivework`, then copy in `.env` and `secrets/kalshi.pem`.
+3. `tailscale funnel --bg 8000` gives `localhost:8000` a public HTTPS address (the first time, it asks you to approve Funnel for the tailnet). Put that address in `dashboard/static/vercel.json`.
+4. `crontab -e` and add:
+   ```
+   */5 * * * * $HOME/hivework/scripts/update.sh >> $HOME/Library/Logs/hivework.log 2>&1
+   ```
+5. Keep it plugged in, lid open, and logged in. If it sleeps, the hive pauses and comes back within 5 minutes of waking.
+
+Logs: `tail -f ~/Library/Logs/hivework.log` for updates, `cd ~/hivework && docker compose logs -f queen` for the bots.
 
 ### Dashboard on Vercel
 
-The pages are static files, so they're hosted on Vercel's free Hobby plan. `dashboard/static/vercel.json` forwards every `/api/*` call to `https://hivework.duckdns.org`. If you use a different DuckDNS name, change it there and in `.env`.
+The pages are static files, so they're hosted on Vercel's free Hobby plan. `dashboard/static/vercel.json` forwards every `/api/*` call to the Mac through Tailscale Funnel.
 
-1. In Vercel, import the GitHub repo. Set **Root Directory** to `dashboard/static`, **Framework** to Other, and leave the build command empty. (Or run `npx vercel` inside `dashboard/static`.)
-2. Vercel redeploys on every merge to `main`. The site is at `<project>.vercel.app`; Vercel picks another name if `hivework` is taken.
-3. Pages load right away, but they only show data once the server is up at `hivework.duckdns.org`.
+1. In Vercel, import the GitHub repo. Set **Root Directory** to `dashboard/static`, **Framework** to Other, and leave the build command empty.
+2. Vercel redeploys on every merge to `main`.
+3. Pages load any time, but they only show data while the Mac is awake and online.
 
 There's no login. Anyone with the link can see the dashboard **and press the kill switch**, so keep the link within the team.

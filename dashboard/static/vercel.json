@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://hivework.duckdns.org/api/:path*" },
+    { "source": "/api/:path*", "destination": "https://alexanders-macbook-pro.tail4e1a56.ts.net/api/:path*" },
     { "source": "/static/:path*", "destination": "/:path*" },
     { "source": "/kalshi", "destination": "/kalshi.html" },
     { "source": "/hive/:name", "destination": "/hive.html" }

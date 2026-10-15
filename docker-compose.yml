@@ -1,6 +1,10 @@
-# Local:   docker compose up --build            -> dashboard at http://localhost:8000
-# Server:  docker compose --profile prod up -d  -> adds Caddy (HTTPS for hivework.duckdns.org), DuckDNS and backups
-# The dashboard pages are hosted on Vercel, which forwards /api/* to the server.
+# Local:  docker compose up --build             -> dashboard at http://localhost:8000
+# Hive:   docker compose --profile prod up -d   -> same, plus daily database backups
+# The always-on hive runs on a Mac (see scripts/update.sh). Tailscale Funnel exposes
+# localhost:8000 over HTTPS, and the Vercel-hosted pages forward /api/* to it.
+
+# Fixed name so every checkout of the repo shares the same containers and data.
+name: hivework
 
 x-app: &app
   build: .
@@ -44,34 +48,9 @@ services:
   dashboard:
     <<: *app
     command: uvicorn dashboard.app:app --host 0.0.0.0 --port 8000 --proxy-headers
-    # Only reachable from this machine. On the server, Caddy (HTTPS) is the way in.
+    # Only reachable from this machine. Tailscale Funnel is the way in from outside.
     ports: ["127.0.0.1:8000:8000"]
     mem_limit: 300m
-
-  caddy:
-    image: caddy:2-alpine
-    profiles: [prod]
-    env_file: .env
-    ports: ["80:80", "443:443"]
-    volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    depends_on: [dashboard]
-    restart: unless-stopped
-
-  duckdns:
-    image: curlimages/curl:latest
-    profiles: [prod]
-    env_file: .env
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        while true; do
-          echo "duckdns: $$(curl -fsS "https://www.duckdns.org/update?domains=$${DUCKDNS_SUBDOMAIN}&token=$${DUCKDNS_TOKEN}&ip=")"
-          sleep 300
-        done
-    restart: unless-stopped
 
   backup:
     image: postgres:16-alpine
@@ -86,5 +65,3 @@ services:
 volumes:
   redis-data:
   pg-data:
-  caddy-data:
-  caddy-config:
